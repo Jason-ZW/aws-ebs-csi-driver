@@ -209,6 +209,8 @@ func (d *nodeService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
 
+	d.getVolumesLimit()
+
 	target := req.GetStagingTargetPath()
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
@@ -255,13 +257,16 @@ func (d *nodeService) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 	output, err := d.mounter.Command("findmnt", args...).Output()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not determine device path: %v", err)
-
 	}
+
+	klog.V(4).Infof("11111111111 %+v\n", output)
 
 	devicePath := strings.TrimSpace(string(output))
 	if len(devicePath) == 0 {
 		return nil, status.Errorf(codes.Internal, "Could not get valid device for mount path: %q", req.GetVolumePath())
 	}
+
+	klog.V(4).Infof("222222222222 %+v\n", devicePath)
 
 	// TODO: refactor Mounter to expose a mount.SafeFormatAndMount object
 	r := resizefs.NewResizeFs(&mount.SafeFormatAndMount{
@@ -271,8 +276,11 @@ func (d *nodeService) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 
 	// TODO: lock per volume ID to have some idempotency
 	if _, err := r.Resize(devicePath, req.GetVolumePath()); err != nil {
+		klog.V(4).Infof("33333333333 %+v\n", err)
 		return nil, status.Errorf(codes.Internal, "Could not resize volume %q (%q):  %v", volumeID, devicePath, err)
 	}
+
+	klog.V(4).Infof("4444444444444\n")
 
 	return &csi.NodeExpandVolumeResponse{}, nil
 }

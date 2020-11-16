@@ -388,6 +388,12 @@ func (d *controllerService) ControllerExpandVolume(ctx context.Context, req *csi
 		return nil, status.Error(codes.InvalidArgument, "After round-up, volume size exceeds the limit specified")
 	}
 
+	// Support offline expansion only
+	err := d.cloud.GetForAttachmentState(ctx, volumeID, "detached")
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "Invalid volume state for expansion")
+	}
+
 	actualSizeGiB, err := d.cloud.ResizeDisk(ctx, volumeID, newSize)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not resize volume %q: %v", volumeID, err)
@@ -395,7 +401,7 @@ func (d *controllerService) ControllerExpandVolume(ctx context.Context, req *csi
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         util.GiBToBytes(actualSizeGiB),
-		NodeExpansionRequired: false,
+		NodeExpansionRequired: true,
 	}, nil
 }
 

@@ -196,6 +196,7 @@ type Cloud interface {
 	AttachDisk(ctx context.Context, volumeID string, nodeID string) (devicePath string, err error)
 	DetachDisk(ctx context.Context, volumeID string, nodeID string) (err error)
 	ResizeDisk(ctx context.Context, volumeID string, reqSize int64) (newSize int64, err error)
+	GetForAttachmentState(ctx context.Context, volumeID, state string) error
 	WaitForAttachmentState(ctx context.Context, volumeID, state string) error
 	GetDiskByName(ctx context.Context, name string, capacityBytes int64) (disk *Disk, err error)
 	GetDiskByID(ctx context.Context, volumeID string) (disk *Disk, err error)
@@ -424,6 +425,36 @@ func (c *cloud) DetachDisk(ctx context.Context, volumeID, nodeID string) error {
 	}
 
 	return nil
+}
+
+func (c *cloud) GetForAttachmentState(ctx context.Context, volumeID, state string) error {
+	request := &ec2.DescribeVolumesInput{
+		VolumeIds: []*string{
+			aws.String(volumeID),
+		},
+	}
+
+	volume, err := c.getVolume(ctx, request)
+	if err != nil {
+		return err
+	}
+
+	if len(volume.Attachments) == 0 {
+		if state == "detached" {
+			return nil
+		}
+	}
+
+	for _, a := range volume.Attachments {
+		if a.State == nil {
+			klog.Warningf("Ignoring nil attachment state for volume %q: %v", volumeID, a)
+			continue
+		}
+		if *a.State == state {
+			return nil
+		}
+	}
+	return errors.New("attachment state is not expected")
 }
 
 // WaitForAttachmentState polls until the attachment status is the expected value.
